@@ -1,6 +1,5 @@
 -- scenes/play_with_friends.lua
 -- Steam P2P entry scene (Create Lobby - STEP 1)
--- + Leave/Close lobby on Back / ESC (to avoid stale lobbies)
 
 local Button = require("ui.button")
 local Steam  = require("steam.steam")
@@ -24,10 +23,8 @@ function Scene.new(sm, params)
     { x = 20, y = 20, w = 160, h = 48 },
     "Back",
     function()
-      -- ✅ leave/close lobby when leaving this scene
-      if Steam.leaveLobby then
-        Steam.leaveLobby()
-      end
+      -- 뒤로 가기 전에 로비 정리(안전)
+      Steam.leaveLobby()
       self.sm:switch("scenes.lobby", { viewport = self.viewport })
     end
   )
@@ -38,9 +35,9 @@ function Scene.new(sm, params)
     function()
       local ok, err = Steam.createLobby()
       if ok then
-        print("[Steam] Lobby created (step 1)")
+        print("[Steam] Lobby created:", tostring(Steam.lobby_id))
       else
-        print("[Steam] CreateLobby failed:", err)
+        print("[Steam] CreateLobby failed:", tostring(err))
       end
     end
   )
@@ -50,8 +47,9 @@ function Scene.new(sm, params)
     "Invite Steam Friend",
     function()
       local ok, err = Steam.openFriendsOverlay()
+      -- overlay 호출이 아직 미구현이면 메시지라도 남김 (크래시 방지)
       if not ok then
-        print("[Steam] Invite failed:", err)
+        print("[Steam] Invite overlay not available:", tostring(err))
       end
     end
   )
@@ -75,10 +73,8 @@ end
 
 function Scene:keypressed(key)
   if key == "escape" then
-    -- ✅ leave/close lobby when leaving this scene
-    if Steam.leaveLobby then
-      Steam.leaveLobby()
-    end
+    -- ESC로 나갈 때도 로비 정리(안전)
+    Steam.leaveLobby()
     self.sm:switch("scenes.lobby", { viewport = self.viewport })
   end
 end
@@ -92,40 +88,48 @@ function Scene:draw()
   love.graphics.setColor(1, 1, 1, 0.95)
   love.graphics.print("Play With Friends", 20, 90)
 
-  -- Steam status
+  -- Steam status (항상 ok, statusString)
   local ok, status = Steam.getStatus()
-  love.graphics.setColor(ok and 0.6 or 1, ok and 1 or 0.6, 0.6, 0.95)
+  if ok then
+    love.graphics.setColor(0.6, 1, 0.6, 0.95)
+  else
+    love.graphics.setColor(1, 0.6, 0.6, 0.95)
+  end
   love.graphics.print(status, 20, 130)
 
   if self.isMobile then
     love.graphics.setColor(1, 0.45, 0.45, 0.95)
-    love.graphics.print(
-      "This mode is not available on mobile devices.",
-      20, 180
-    )
+    love.graphics.print("This mode is not available on mobile devices.", 20, 180)
     return
   end
 
   -- Lobby status
   love.graphics.setColor(1, 1, 1, 0.85)
-  love.graphics.print(
-    "Lobby State: " .. tostring(Steam.lobby_state),
-    20, 170
-  )
+  love.graphics.print("Lobby State: " .. tostring(Steam.lobby_state), 20, 170)
 
   if Steam.lobby_id then
-    love.graphics.print(
-      "Lobby ID: " .. tostring(Steam.lobby_id),
-      20, 195
-    )
+    love.graphics.print("Lobby ID: " .. tostring(Steam.lobby_id), 20, 195)
+  end
+
+  if Steam.lobby_error then
+    love.graphics.setColor(1, 0.55, 0.55, 0.95)
+    love.graphics.print("Lobby Error: " .. tostring(Steam.lobby_error), 20, 220)
   end
 
   -- Button enable rules
-  self.createLobbyBtn.enabled = ok and Steam.lobby_state ~= "created"
+  self.createLobbyBtn.enabled = ok and (Steam.lobby_state ~= "created")
   self.inviteBtn.enabled      = ok and Steam.hasLobby()
 
   self.createLobbyBtn:draw(self.pointerX, self.pointerY)
   self.inviteBtn:draw(self.pointerX, self.pointerY)
+
+  if not ok then
+    love.graphics.setColor(1, 1, 1, 0.55)
+    love.graphics.print(
+      "Tip: Run via Steam, and ensure steam_api64.dll is next to the exe.",
+      20, 520
+    )
+  end
 end
 
 return Scene
