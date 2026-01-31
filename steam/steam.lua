@@ -4,6 +4,8 @@
 -- NOTE: Lobby create here is "project-level state" (not real Steam matchmaking yet).
 
 local api = require("sworks.api")
+local matchmaking = require("sworks.matchmaking")
+
 
 local Steam = {
   ok = false,
@@ -99,42 +101,38 @@ function Steam.leaveLobby()
 end
 
 function Steam.createLobby()
-  ensure_init()
   if not Steam.ok then
     Steam.lobby_state = "error"
     Steam.lobby_error = "Steam not ready"
     return false, Steam.lobby_error
   end
 
-  -- 이미 있으면 중복 생성 방지
   if Steam.lobby_state == "created" and Steam.lobby_id then
     return true
   end
 
   Steam.lobby_state = "creating"
   Steam.lobby_error = nil
+  Steam.lobby_id = nil
 
-  -- ★ 현재 단계(안 깨지는 단계)에서는 “실제 Steam Matchmaking”이 아니라
-  --   “로비가 생성되었다고 게임이 다룰 수 있는 상태/ID”까지 먼저 잡는다.
-  --   (실제 Steam 로비 연동은 다음 단계에서 Matchmaking 바인딩이 필요)
-  local t = os.time()
-  local r = math.random(100000, 999999)
-  Steam.lobby_id = tostring(t) .. "-" .. tostring(r)
-  Steam.lobby_state = "created"
+  local ok, err = matchmaking.createLobby(Steam)
+  if not ok then
+    Steam.lobby_state = "error"
+    Steam.lobby_error = err
+    return false, err
+  end
 
   return true
 end
 
+
 function Steam.openFriendsOverlay()
-  ensure_init()
   if not Steam.ok then
     return false, "Steam not ready"
   end
 
-  -- 네 프로젝트 백업 기준(api.lua)에 실제 overlay 함수가 없음.
-  -- 여기서 “실제 overlay 호출”을 시도하면 크래시 위험이 커서,
-  -- 현 단계에선 안전하게 안내만 반환.
-  return false, "Overlay API not wired yet (Shift+Tab works)."
+  return matchmaking.openInviteDialog(Steam)
 end
+
 
 return Steam
