@@ -2,15 +2,21 @@
 -- - SceneManager로 씬 전환/입력 라우팅
 -- - Steam 래퍼(steam/steam.lua) init/update/shutdown 연결
 
--- steam diagnostics (크래시 방지: 실패해도 게임 계속)
-pcall(require, "steam_diag")
+-- ✅ file logger (Steam 실행에서도 로그 남기기)
+local Logger = require("logger")
+Logger.hook_print()
+Logger.hook_errorhandler()
+print("[Logger] writing to:", Logger.path())
+
+-- steam diagnostics
+require("steam_diag")
 
 local SceneManager = require("app.scene_manager")
 local Steam = require("steam.steam")
 
 local sm = nil
 
--- 현재 프로젝트 기준 고정 해상도
+-- 현재 프로젝트 기준 고정 해상도 (원하면 바꿔도 됨)
 local VIRTUAL_W, VIRTUAL_H = 1000, 650
 
 function love.load()
@@ -20,17 +26,23 @@ function love.load()
     vsync = true
   })
 
+  -- 랜덤 시드 (룸코드 등)
   love.math.setRandomSeed(os.time())
 
-  -- Steam 초기화 (실패해도 게임은 계속 실행)
-  Steam.init()
+  print("[Boot] LOVE started")
+  print("[Boot] OS:", love.system.getOS(), "SaveDir:", love.filesystem.getSaveDirectory())
 
+  -- ✅ Steam 초기화 (바인딩 없으면 실패해도 게임은 계속 실행)
+  local ok = Steam.init()
+  print("[Steam] init:", ok, Steam.getStatus and (select(2, Steam.getStatus())) or "")
+
+  -- 씬 매니저 생성 + 로비 진입
   sm = SceneManager.new()
   sm:switch("scenes.lobby", { viewport = { w = VIRTUAL_W, h = VIRTUAL_H } })
 end
 
 function love.update(dt)
-  -- Steam 콜백 처리(초대/네트워크 이벤트 수신에 필요)
+  -- ✅ Steam 콜백 처리(초대/네트워크 이벤트 수신에 필요)
   Steam.update()
 
   if sm then
@@ -44,6 +56,7 @@ function love.draw()
   end
 end
 
+-- 마우스 → 포인터 이벤트로 통일
 function love.mousemoved(x, y, dx, dy)
   if sm then sm:pointerMoved(x, y) end
 end
@@ -60,6 +73,7 @@ function love.mousereleased(x, y, button)
   end
 end
 
+-- 터치도 같은 포인터 이벤트로 통일 (모바일 대비)
 function love.touchmoved(id, x, y, dx, dy, pressure)
   local px, py = x * VIRTUAL_W, y * VIRTUAL_H
   if sm then sm:pointerMoved(px, py) end
@@ -81,6 +95,7 @@ function love.keypressed(key)
   end
 end
 
+-- ✅ 텍스트 입력(UI TextBox 등)
 function love.textinput(t)
   if sm then
     sm:textinput(t)
@@ -88,6 +103,7 @@ function love.textinput(t)
 end
 
 function love.quit()
-  -- Steam 종료
+  print("[Quit] love.quit called")
+  -- ✅ Steam 종료
   Steam.shutdown()
 end
